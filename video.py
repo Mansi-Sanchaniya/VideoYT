@@ -382,13 +382,24 @@ def clip_and_merge_videos(segments, downloaded_video_path, output_filename):
         if not os.path.exists(downloaded_video_path):
             raise FileNotFoundError(f"Video file not found at: {downloaded_video_path}")
 
-        # Using moviepy to clip both audio and video
-        video_clip = mp.VideoFileClip(downloaded_video_path).subclip(start_time, end_time)
-        temp_clips.append(video_clip)  # Add the video clip to the list
+       # Using moviepy to clip both audio and video
+        video_clip = mp.VideoFileClip(downloaded_video_path)
+        # Ensure that the end_time does not exceed the video's duration
+        end_time = min(end_time, video_clip.duration)
+        video_clip = video_clip.subclip(start_time, end_time)
+        min_clip_duration = 1.0
+        # Check the duration of the clip before adding it to the list
+        clip_duration = video_clip.duration
+        if clip_duration < min_clip_duration:
+            st.warning(
+                f"Skipping clip with duration {clip_duration} seconds, as it's below the minimum threshold of {min_clip_duration} seconds.")
+            video_clip.close()
+            continue  # Skip this clip if its duration is too small
 
-        # Calculate the clip's duration
+        temp_clips.append(video_clip)  # Add the video clip to the list
         clip_duration = video_clip.duration
         total_duration += clip_duration  # Add the clip duration to the total
+
 
     # Convert total duration to minutes
     total_duration_minutes = total_duration / 60
@@ -399,11 +410,14 @@ def clip_and_merge_videos(segments, downloaded_video_path, output_filename):
         final_clip = mp.concatenate_videoclips(temp_clips)
 
         # Write the final video with audio
-        final_clip.write_videofile(output_path, codec='libx264', audio_codec='aac')
+        final_clip.write_videofile(output_path, codec='libx264', audio_codec='aac', fps=24)
 
         # Clean up temporary clips
         for clip in temp_clips:
             clip.close()
+        # Clean up the downloaded video after merging
+        if os.path.exists(downloaded_video_path):
+            os.remove(downloaded_video_path)
 
         return output_path  # Return the path to the merged video
     else:
